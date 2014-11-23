@@ -1,0 +1,291 @@
+/* 首先，js的基础介绍就不多说了，比如发展背景、语法（语句、变量、注释、数据类型、数组）、操作等等。
+        附上Js教程传送门：http://www.w3school.com.cn/js/index.asp
+        或者参考一本《JavaScript编程艺术》（第二版） by Jeremy Keith & Jeffrey Samblells 人民邮电出版社出版
+
+如何界定？要是你不知道以下几点，可以去上面推荐的两个地方搞明白：
+1、javaScript对象（内置对象、宿主对象、自定义对象）、事件（零级DOM事件【如“onclick"】、W3C标准事件【如“click"】）
+、方法（也可以理解成函数）
+2、DOM (Document Object Model文档对象模型)
+
+
+一、常用的八个函数
+1.添加、去除事件处理函数的方法
+你是否对函数添加有困惑？比如window.onload事件发生后，即页面加载完成这一事件后要启动（事件监听者），这样是危险的：*/
+window.onload=function1 ();
+window.onload=function2 ();
+/*有可能在页面加载完只会执行最后一个函数；而且，没有任何办法去除。
+用这个就可以解决了：*/
+//（1）addLoadEvent 
+function addLoadEvent (func) {
+	var oldload=window.onload;
+	if (typeof oldload != "function"){
+		window.onload=func ();                   //如果window.onload还没有添加函数，就把func函数添加给它
+	} else {
+		window.onload=function () {
+			oldload ();                          //如果window.onload已经添加了函数，就先执行以前的，再执行新的func
+			func();            
+		}
+	}	
+} 
+//这样如果想添加函数function1,只需要这样写一句：addLoadEvent(function1);  就行了，但是还是没法去除
+// (2) addLoadListener
+function addLoadListener (func) {
+	if (typeof window.addEventListener!="undefined") {
+		window.addEventListener("load",func,false);                    //------标准方法
+	} else if(typeof document.addEventListener!="undefined") {
+		document.addEventListener("load",func,false);
+	} else if(typeof window.attachEvent !="undefined") {
+		window.attachEvent("onload",func);                             //------IE方法
+	} else {
+		var oldfunc=window.onload;
+		if (typeof window.onload!="function") {
+			window.onload=func;
+		} else {
+			window.onload=function () {
+				oldfunc();
+				func();
+			}
+		}
+	}
+}
+//addLoadListener是一个更完备的函数，其中addEventListener()和window.attachEvent()
+//前者是标准方法，后者是IE自己的内置方法，都可以直接用，细节忽略,总之：
+//你要添加function1()这个函数，只要写：addLoadListener(function1);  就行了
+//(3) attachEventListener
+function attachEventListener (target, event_type, func, capture) {
+	if (typeof target.addEventListener != 'undefined') {
+		target.addEventListener(event_type, func, capture) ;      //------标准方法
+	} else if(typeof target.attachEvent != 'undefined') {
+        target.attachEvent("on"+ event_type,func);                //------IE方法
+	} else {                                                      //------其他少数不支持情况
+		event_type="on" + event_type;
+		if (typeof target[event_type]=='function') {
+			var oldListener=target[event_type];
+			target[event_type] = function (){
+				oldListener ();
+				return func();
+			}
+		} else {
+			target[event_type]=func;
+		}
+	}
+}
+//这个函数和上面的形式一样，只不过不单单可以处理window.onload事件了，任何事件都可以用它来搞定！
+//比如，你要对id="newDiv" 的元素添加click事件函数function1，只需要这样写：
+var new_div=document.getElementById("newDiv");
+attachEventListener (new_div, click, function1, false);
+//就行了，其他双击、鼠标悬浮等等事件都一样
+//（4）去除事件监听者：detachEventListener()
+function detachEventListener (target, event_type, func, capture) {
+	if (typeof target.removeEventListener!= "undefined") {
+		target.removeEventListener(event_type,func,capture);     //------标准方法
+	} else if (typeof target.detachEvent != "undefined") {
+		target.detachEvent("on"+event_type,func);                //------IE方法
+	} else {
+		target["on" + event_type]=null;                          //------Mac IE5等其他情况
+	}
+}
+//这样一来，想在某个对象target中去掉一个事件click的监听者function1，只需要：
+detachEventListener (target, "click", function1, false);
+
+
+
+/* 2. 负责的码农需要检查浏览器呵呵*/
+function identifyBrowser() {
+	var agent=navigator.userAgent.toLowerCase();
+	if(typeof navigator.vendor!="undefined" && navigator.vendor=="KDE" && typeof window.sidebar!="undefined") {
+		return "kde";
+	} else if(typeof window.opera!="undefined") {
+        var version= parseFloat(agent.replace(/.*opera[\/ ]([^ $]+).*/,"$1"));
+        if (version>=7) {
+        	return "opera7";
+        } else if(version>=5){
+        	return "opera5";
+        } 
+        return false;
+	} else if (typeof document.all != "undefined") {
+		if (typeof document.getElementById!="undefined") {
+			var browser=agent.replace(/.*ms(ie[\/ ][^ $]+).*/,"$1").replace(/ /,"");
+			if(typeof document.uniqueId != "undefined") {
+				if (browser.indexOf("5.5")!= -1) {
+					return browser.replace(/(.*5\.5).*/,"$1");
+				} else {
+					return browser.replace(/(.*)\..*/,"$1");
+				}
+			} else {
+				return "ie5mac";
+			}
+		}
+		return false;
+	} else if (typeof document.getElementById!="undefined") {
+		if (navigator.vendor.indexOf("Apple Computer, Inc.")!= -1) {
+			if (typeof window.XMLHttpRequest != "undefined") {
+				return "safari1.2";
+			}
+			return "safari1";
+		}
+		else if (agent.indexOf("gecko")!=-1) {
+			return "mozilla";
+		}
+	}
+    return false;
+}
+//这个函数用了不少正则，正则细节不用在意。
+//这样一来，比如我们要排除一些函数在mac的ie5（几乎什么都不支持的浏览器）上的使用以免出错，我们可以用以下的语句：
+if (identifyBrowser()="ie5mac") {return false};
+
+
+
+/* 3. 根据特定属性值来选择元素
+我萌知道，JS提供给我们三种选择元素的方法：getElementById()、getElementsByTagName()、getElementsByClassName()
+然而就是没有用属性值来选择，比如getElementByAttributeName(AttributeName,value),那么我们就来创造一个：
+getElementsByAttribute(attribute,attributeValue) */
+
+function getElementsByAttribute(attribute,attributeValue) {
+	var elementArray= new Array();
+	var matchedArray=new Array();
+	if (document.all) {
+		elementArray=document.all;
+	} else {
+		elementArray=document.getElementsByTagName("*");
+	}
+	for (var i=0; i<elementArray.length; i++) {
+		if(attribute=="class") {
+			var pattern=new RegExp("(^| )"+attributeValue+"( |$)");
+			if (pattern.test(elementArray[i].className)) {
+				matchedArray[matchedArray.length]=elementArray[i];
+			}
+	    }
+		else if (attribute=="for") {
+             if(elementArray[i].getAttribute("htmlFor") || elementArray[i].getAttribute("for")) {
+             	if (elementArray[i].htmlFor == attributeValue) {
+             		matchedArray[matchedArray]=elementArray[i];
+             	}
+             }  
+		}
+		else if (elementArray[i].getAttribute(attribute)==attributeValue) {
+			matchedArray[matchedArray.length]=elementArray[i];
+		}
+	}
+	return matchedArray;
+}
+//这个函数简单易懂
+//这样，我们要找name属性是"let'sGo" 的所有元素，只要这样写就行了：
+var elements=getElementsByAttribute("name","let'sGo");
+//注意，这个和getElementsByTagName是不一样的：
+var elements=document.getElementsByTagName("div");
+//但是getElementsByAttribute前面不用加上document.
+
+
+
+
+/* 4.JS提供了insertBefore(),但是没有insertAfter(),我们来创造：*/
+function insertAfter (newElement,targetElement) {
+	var parent=targetElement.parentNode;
+	if (parent.lastChild==targetElement) {
+		parent.appendChild(newElement);
+	} else {
+		parent.insertBefore(newElement,targetElement.nextSibling);                //注意insertBefore的用法
+	}  
+}
+//这个函数简单易懂
+//这个函数的使用方法和insertBefore()是一样的，不懂可寻度娘。
+
+
+
+/* 5. 获得窗口大小*/
+function getViewportSize () {
+	var size=[0,0];
+	if (typeof window.innerWidth != 'undefined') {
+		size=[
+		window.innerWidth,
+		window.innerHeight
+		];
+	} else if (typeof document.documentElement !='undefined' 
+		&& typeof document.documentElement.clientWidth !='undefined' 
+		&& document.documentElement.clientwidth!=0) {
+        size=[
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight
+        ];    
+	} else {
+		size=[
+		document.getElementsByTagName("body")[0].clientWidth,
+		document.getElementsByTagName("body")[0].clientHeight
+		];
+	}
+	return size;
+}
+//这个函数简单易懂，条件语句依然是对应着标准方法、IE方法
+//这样一来，getViewportSize()[0]代表了当前屏幕的宽度，而getViewportSize()[1]代表了当前屏幕的高度。
+
+
+
+/* 6. 获取滚动条的位置*/
+function getScrollingPosition () {
+	var position=[0,0];
+	if (typeof window.pageYOffset !='undefined') {
+		position =[
+		window.pageXOffset,
+		window.pageYOffset
+		];
+	} else if(typeof document.documentElement.scrollTop!='undefined' && document.documentElement.scrollTop>0) {
+        position=[
+        document.documentElement.scrollLeft,
+        document.documentElement.scrollTop
+        ];
+	} else if (typeof document.body.scrollTop!='undefined') {
+		position= [
+		document.body.scrollLeft,
+		document.body.scrollTop
+		];
+	}
+	return position;
+}
+//这个函数简单易懂，条件语句依然是对应着标准方法、IE方法
+//用alert(getScrollingPosition()[1]); 来实验它的作用吧，你懂的！
+
+
+
+/* 7.获得鼠标的位置 */
+function getCursorPosition (event) {
+	if (typeof event=='undefined') {
+		event=window.event;
+	}
+	var scrollingPosition=getScrollingPosition ();
+	var cursorPosition=[0,0];
+	if(typeof event.pageX != 'undefined' && typeof event.x != 'undefined') {
+        cursorPosition[0]=event.pageX;
+        cursorPosition[1]=event.pageY;
+	} else {
+		cursorPosition[0]=event.clientX + scrollingPosition[0];
+		cursorPosition[1]=event.clientY + scrollingPosition[1];
+	}
+	var para=document.getElementsByTagName("P")[2];
+	var newChild=document.createTextNode("鼠标的位置是：左" + cursorPosition[0] +"px, 上"+ cursorPosition[1]+"px");
+	var oldChild=para.firstChild;
+	para.replaceChild(newChild,oldChild);
+	return cursorPosition;
+}
+//这个函数简单易懂，条件语句依然是对应着标准方法、IE方法
+//这样一来，getCursorPosition(event)[0]代表鼠标当前距离页面最左端的距离，getCursorPosition(event)[1]距离最顶端喽。
+
+
+
+/* 8. 获得给定元素的位置 */
+function getPosition (theElement) {
+	var positionX=0;
+	var positionY=0;
+	while (theElement!=null) {
+		positionX+= theElement.offsetLeft;
+		positionY+= theElement.offsetTop;
+		theElement=theElement.offsetParent;
+	}
+	return [positionX,positionY];
+}
+//这样一来：
+var new_div=document.getElementById("newDiv");
+alert(getPosition(new_div)[0]);
+//表示new_div这个元素left属性的值；
+注：以上部分函数参考自《javaScript编程艺术》和《JavaScript精粹》，仅供交流借鉴使用。
+
